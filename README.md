@@ -1,12 +1,16 @@
 # Telegram 自動新聞推播
 
-每天早上（台灣時間 08:00）自動從 Google 新聞 RSS 抓取最新新聞，並透過 Telegram Bot 推播給你。
+每天早上（台灣時間 07:45）自動抓取三類新聞，並透過 Telegram Bot 推播給你：
+
+- 🌏 國際與台灣新聞
+- 🤖 AI 相關新聞
+- 📍 彰化新聞與活動
 
 ## 運作方式
 
-- `scripts/send-news-to-telegram.js` 抓取 RSS feed，篩選出上次執行後的新項目，推送到指定的 Telegram 聊天。
+- `scripts/send-news-to-telegram.js` 分別抓取三個 RSS feed，各自篩選出上次執行後的新項目，依分類組成訊息後推送到指定的 Telegram 聊天。
 - `.github/workflows/daily-news-to-telegram.yml` 每天用 GitHub Actions 排程執行一次（也可以手動觸發 `workflow_dispatch`）。
-- `data/state.json` 記錄最後推播過的新聞時間，避免重複推播。
+- `data/state.json` 分別記錄每個分類最後推播過的新聞時間，避免重複推播。
 
 ## 設定步驟
 
@@ -32,19 +36,17 @@
 
 ### 3.（選用）更換新聞來源
 
-預設使用 Google 新聞台灣繁中頭條 RSS：
+目前預設抓三個 Google 新聞 RSS：
 
-```
-https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant
-```
+| 分類 | 預設 RSS 網址 | 對應 Actions variable |
+| --- | --- | --- |
+| 🌏 國際與台灣新聞 | `https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant` | `RSS_URL_GENERAL` |
+| 🤖 AI 相關新聞 | `https://news.google.com/rss/search?q=AI&hl=zh-TW&gl=TW&ceid=TW:zh-Hant` | `RSS_URL_AI` |
+| 📍 彰化新聞與活動 | `https://news.google.com/rss/search?q=彰化&hl=zh-TW&gl=TW&ceid=TW:zh-Hant` | `RSS_URL_CHANGHUA` |
 
-若要改成特定關鍵字或分類，可以用 Google 新聞的搜尋 RSS，例如只看「科技」：
+要更換某個分類的來源，在 repo 設定對應名稱的 Actions variable（Settings → Secrets and variables → Actions → Variables），指向新的 RSS 網址即可，不需要改程式碼。
 
-```
-https://news.google.com/rss/search?q=%E7%A7%91%E6%8A%80&hl=zh-TW&gl=TW&ceid=TW:zh-Hant
-```
-
-要更換來源時，在 repo 設定一個名為 `RSS_URL` 的 Actions variable（或直接改 workflow 檔案裡的 `env`），指向新的 RSS 網址即可，不需要改程式碼。
+每個分類每次最多推播 8 則新項目，可用 `MAX_ITEMS_PER_FEED` 這個 Actions variable 調整。
 
 ## 本機測試
 

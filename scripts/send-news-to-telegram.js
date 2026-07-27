@@ -2,20 +2,42 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 import Parser from "rss-parser";
 
-const RSS_URL =
-  process.env.RSS_URL || "https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
-const MAX_ITEMS = Number(process.env.MAX_ITEMS || 10);
+const MAX_ITEMS_PER_FEED = Number(process.env.MAX_ITEMS_PER_FEED || 8);
 const STATE_FILE = path.resolve("data/state.json");
 const TELEGRAM_MAX_TEXT_LENGTH = 4096;
+
+const FEEDS = [
+  {
+    key: "general",
+    label: "🌏 國際與台灣新聞",
+    url:
+      process.env.RSS_URL_GENERAL ||
+      "https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+  },
+  {
+    key: "ai",
+    label: "🤖 AI 相關新聞",
+    url:
+      process.env.RSS_URL_AI ||
+      "https://news.google.com/rss/search?q=AI&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+  },
+  {
+    key: "changhua",
+    label: "📍 彰化新聞與活動",
+    url:
+      process.env.RSS_URL_CHANGHUA ||
+      "https://news.google.com/rss/search?q=%E5%BD%B0%E5%8C%96&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
+  },
+];
 
 async function readState() {
   try {
     const raw = await readFile(STATE_FILE, "utf8");
     return JSON.parse(raw);
   } catch {
-    return { lastPubDate: null };
+    return {};
   }
 }
 
@@ -59,6 +81,18 @@ async function sendToTelegram(text) {
   }
 }
 
+async function fetchNewItems(feed, lastPubDate) {
+  const parser = new Parser();
+  const parsed = await parser.parseURL(feed.url);
+
+  return parsed.items
+    .filter((item) => item.pubDate && item.title && item.link)
+    .map((item) => ({ ...item, pubDateObj: new Date(item.pubDate) }))
+    .filter((item) => !lastPubDate || item.pubDateObj > lastPubDate)
+    .sort((a, b) => a.pubDateObj - b.pubDateObj)
+    .slice(-MAX_ITEMS_PER_FEED);
+}
+
 async function main() {
   if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     throw new Error(
@@ -67,30 +101,35 @@ async function main() {
   }
 
   const state = await readState();
-  const lastPubDate = state.lastPubDate ? new Date(state.lastPubDate) : null;
+  const sections = [];
+  const newState = { ...state };
+  let totalItems = 0;
 
-  const parser = new Parser();
-  const feed = await parser.parseURL(RSS_URL);
+  for (const feed of FEEDS) {
+    const lastPubDate = state[feed.key]?.lastPubDate
+      ? new Date(state[feed.key].lastPubDate)
+      : null;
 
-  const items = feed.items
-    .filter((item) => item.pubDate && item.title && item.link)
-    .map((item) => ({ ...item, pubDateObj: new Date(item.pubDate) }))
-    .filter((item) => !lastPubDate || item.pubDateObj > lastPubDate)
-    .sort((a, b) => a.pubDateObj - b.pubDateObj)
-    .slice(-MAX_ITEMS);
+    const items = await fetchNewItems(feed, lastPubDate);
 
-  if (items.length === 0) {
+    if (items.length === 0) continue;
+
+    sections.push(`${feed.label}\n\n${items.map(formatItem).join("\n\n")}`);
+    newState[feed.key] = {
+      lastPubDate: items[items.length - 1].pubDateObj.toISOString(),
+    };
+    totalItems += items.length;
+  }
+
+  if (totalItems === 0) {
     console.log("No new news items since last run.");
     return;
   }
 
-  const text = items.map(formatItem).join("\n\n");
-  await sendToTelegram(text);
+  await sendToTelegram(sections.join("\n\n---\n\n"));
+  await writeState(newState);
 
-  const newestPubDate = items[items.length - 1].pubDateObj.toISOString();
-  await writeState({ lastPubDate: newestPubDate });
-
-  console.log(`Sent ${items.length} news item(s) to Telegram.`);
+  console.log(`Sent ${totalItems} news item(s) to Telegram.`);
 }
 
 main().catch((err) => {

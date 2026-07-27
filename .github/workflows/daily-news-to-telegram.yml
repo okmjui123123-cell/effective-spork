@@ -2,8 +2,8 @@ name: Daily news to Telegram
 
 on:
   schedule:
-    # 00:00 UTC = 08:00 Asia/Taipei
-    - cron: "0 0 * * *"
+    # 23:45 UTC = 07:45 Asia/Taipei (next day)
+    - cron: "45 23 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -25,7 +25,10 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          RSS_URL: ${{ vars.RSS_URL }}
+          RSS_URL_GENERAL: ${{ vars.RSS_URL_GENERAL }}
+          RSS_URL_AI: ${{ vars.RSS_URL_AI }}
+          RSS_URL_CHANGHUA: ${{ vars.RSS_URL_CHANGHUA }}
+          MAX_ITEMS_PER_FEED: ${{ vars.MAX_ITEMS_PER_FEED }}
 
       - name: Commit updated state
         run: |
