@@ -4,13 +4,11 @@ import Parser from "rss-parser";
 
 const RSS_URL =
   process.env.RSS_URL || "https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant";
-const LINE_CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-const LINE_USER_ID = process.env.LINE_USER_ID;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID;
 const MAX_ITEMS = Number(process.env.MAX_ITEMS || 10);
 const STATE_FILE = path.resolve("data/state.json");
-const LINE_PUSH_URL = "https://api.line.me/v2/bot/message/push";
-const LINE_MAX_MESSAGES_PER_PUSH = 5;
-const LINE_MAX_TEXT_LENGTH = 5000;
+const TELEGRAM_MAX_TEXT_LENGTH = 4096;
 
 async function readState() {
   try {
@@ -34,36 +32,37 @@ function chunkText(fullText) {
   const chunks = [];
   let remaining = fullText;
   while (remaining.length > 0) {
-    chunks.push(remaining.slice(0, LINE_MAX_TEXT_LENGTH));
-    remaining = remaining.slice(LINE_MAX_TEXT_LENGTH);
+    chunks.push(remaining.slice(0, TELEGRAM_MAX_TEXT_LENGTH));
+    remaining = remaining.slice(TELEGRAM_MAX_TEXT_LENGTH);
   }
   return chunks;
 }
 
-async function pushToLine(text) {
-  const messages = chunkText(text)
-    .slice(0, LINE_MAX_MESSAGES_PER_PUSH)
-    .map((t) => ({ type: "text", text: t }));
+async function sendToTelegram(text) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
 
-  const response = await fetch(LINE_PUSH_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${LINE_CHANNEL_ACCESS_TOKEN}`,
-    },
-    body: JSON.stringify({ to: LINE_USER_ID, messages }),
-  });
+  for (const chunk of chunkText(text)) {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: chunk,
+        disable_web_page_preview: false,
+      }),
+    });
 
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`LINE push failed (${response.status}): ${body}`);
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`Telegram sendMessage failed (${response.status}): ${body}`);
+    }
   }
 }
 
 async function main() {
-  if (!LINE_CHANNEL_ACCESS_TOKEN || !LINE_USER_ID) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
     throw new Error(
-      "Missing LINE_CHANNEL_ACCESS_TOKEN or LINE_USER_ID environment variables."
+      "Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID environment variables."
     );
   }
 
@@ -86,12 +85,12 @@ async function main() {
   }
 
   const text = items.map(formatItem).join("\n\n");
-  await pushToLine(text);
+  await sendToTelegram(text);
 
   const newestPubDate = items[items.length - 1].pubDateObj.toISOString();
   await writeState({ lastPubDate: newestPubDate });
 
-  console.log(`Sent ${items.length} news item(s) to LINE.`);
+  console.log(`Sent ${items.length} news item(s) to Telegram.`);
 }
 
 main().catch((err) => {
