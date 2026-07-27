@@ -28,6 +28,7 @@ jobs:
           RSS_URL_GENERAL: ${{ vars.RSS_URL_GENERAL }}
           RSS_URL_AI: ${{ vars.RSS_URL_AI }}
           RSS_URL_CHANGHUA: ${{ vars.RSS_URL_CHANGHUA }}
+          RSS_URL_STOCKS: ${{ vars.RSS_URL_STOCKS }}
           MAX_ITEMS_PER_FEED: ${{ vars.MAX_ITEMS_PER_FEED }}
 
       - name: Commit updated state
