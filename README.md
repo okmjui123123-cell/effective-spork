@@ -1,26 +1,25 @@
-# LINE 自動新聞推播
+# Telegram 自動新聞推播
 
-每天早上（台灣時間 08:00）自動從 Google 新聞 RSS 抓取最新新聞，並透過 LINE Messaging API 推播給你。
+每天早上（台灣時間 08:00）自動從 Google 新聞 RSS 抓取最新新聞，並透過 Telegram Bot 推播給你。
 
 ## 運作方式
 
-- `scripts/send-news-to-line.js` 抓取 RSS feed，篩選出上次執行後的新項目，推送到指定的 LINE 使用者。
-- `.github/workflows/daily-news-to-line.yml` 每天用 GitHub Actions 排程執行一次（也可以手動觸發 `workflow_dispatch`）。
+- `scripts/send-news-to-telegram.js` 抓取 RSS feed，篩選出上次執行後的新項目，推送到指定的 Telegram 聊天。
+- `.github/workflows/daily-news-to-telegram.yml` 每天用 GitHub Actions 排程執行一次（也可以手動觸發 `workflow_dispatch`）。
 - `data/state.json` 記錄最後推播過的新聞時間，避免重複推播。
 
 ## 設定步驟
 
-### 1. 建立 LINE Messaging API Channel
+### 1. 建立 Telegram Bot
 
-1. 前往 [LINE Developers Console](https://developers.line.biz/console/)，建立一個 Provider 與 Messaging API Channel。
-2. 在 Channel 設定的「Messaging API」分頁：
-   - 產生並複製 **Channel access token (long-lived)**。
-   - 用手機掃描 QR Code，把這個官方帳號加為好友。
-3. 取得你的 **User ID**：
-   - 在同一個 Messaging API 分頁的「Basic settings」找不到個人 User ID，需要透過 Webhook 取得。最簡單的方式：
-     - 在 Channel 設定中開啟 Webhook，並設定一個暫時的 Webhook URL（可用 [webhook.site](https://webhook.site) 之類的服務先抓一次事件）。
-     - 用剛加好友的帳號傳一則訊息給官方帳號，Webhook 收到的事件內容裡的 `source.userId` 就是你的 User ID。
-   - 或使用 LINE 官方帳號後台（LINE Official Account Manager）的「進階設定」查詢。
+1. 在 Telegram 搜尋並打開 **@BotFather**，傳送 `/newbot`
+2. 依照指示取名字，完成後 BotFather 會回傳一組 **Bot Token**（格式類似 `123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`），複製起來
+3. 用你自己的 Telegram 帳號傳一句話給剛建立的 bot（先跟它開對話，bot 才能傳訊息給你）
+4. 取得你的 **Chat ID**：瀏覽器打開（記得把 `<TOKEN>` 換成你的 Bot Token）：
+   ```
+   https://api.telegram.org/bot<TOKEN>/getUpdates
+   ```
+   回傳的 JSON 裡找 `result[0].message.chat.id`，這串數字就是你的 Chat ID
 
 ### 2. 設定 GitHub Secrets
 
@@ -28,8 +27,8 @@
 
 | Secret 名稱 | 說明 |
 | --- | --- |
-| `LINE_CHANNEL_ACCESS_TOKEN` | 上一步取得的 Channel access token |
-| `LINE_USER_ID` | 上一步取得的 User ID |
+| `TELEGRAM_BOT_TOKEN` | 上一步取得的 Bot Token |
+| `TELEGRAM_CHAT_ID` | 上一步取得的 Chat ID |
 
 ### 3.（選用）更換新聞來源
 
@@ -51,9 +50,9 @@ https://news.google.com/rss/search?q=%E7%A7%91%E6%8A%80&hl=zh-TW&gl=TW&ceid=TW:z
 
 ```bash
 npm install
-LINE_CHANNEL_ACCESS_TOKEN=xxx LINE_USER_ID=xxx npm run send-news
+TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=xxx npm run send-news
 ```
 
 ## 手動觸發
 
-到 GitHub repo 的 **Actions → Daily news to LINE → Run workflow** 即可立即執行一次，不需要等到排程時間。
+到 GitHub repo 的 **Actions → Daily news to Telegram → Run workflow** 即可立即執行一次，不需要等到排程時間。

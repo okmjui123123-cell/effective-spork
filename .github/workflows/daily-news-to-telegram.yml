@@ -1,4 +1,4 @@
-name: Daily news to LINE
+name: Daily news to Telegram
 
 on:
   schedule:
@@ -23,8 +23,8 @@ jobs:
 
       - run: npm run send-news
         env:
-          LINE_CHANNEL_ACCESS_TOKEN: ${{ secrets.LINE_CHANNEL_ACCESS_TOKEN }}
-          LINE_USER_ID: ${{ secrets.LINE_USER_ID }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           RSS_URL: ${{ vars.RSS_URL }}
 
       - name: Commit updated state

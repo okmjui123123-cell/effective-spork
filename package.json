@@ -1,11 +1,11 @@
 {
-  "name": "line-news-publisher",
+  "name": "telegram-news-publisher",
   "version": "1.0.0",
   "private": true,
-  "description": "Fetches news from an RSS feed and pushes new items to LINE via the Messaging API.",
+  "description": "Fetches news from an RSS feed and pushes new items to Telegram via the Bot API.",
   "type": "module",
   "scripts": {
-    "send-news": "node scripts/send-news-to-line.js"
+    "send-news": "node scripts/send-news-to-telegram.js"
   },
   "dependencies": {
     "rss-parser": "^3.13.0"
