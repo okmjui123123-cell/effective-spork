@@ -30,6 +30,15 @@ const FEEDS = [
       process.env.RSS_URL_CHANGHUA ||
       "https://news.google.com/rss/search?q=%E5%BD%B0%E5%8C%96&hl=zh-TW&gl=TW&ceid=TW:zh-Hant",
   },
+  {
+    key: "stocks",
+    label: "📈 美股與台股新聞",
+    url:
+      process.env.RSS_URL_STOCKS ||
+      `https://news.google.com/rss/search?q=${encodeURIComponent(
+        "美股 OR 台股"
+      )}&hl=zh-TW&gl=TW&ceid=TW:zh-Hant`,
+  },
 ];
 
 async function readState() {
