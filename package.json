@@ -1,0 +1,13 @@
+{
+  "name": "line-news-publisher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fetches news from an RSS feed and pushes new items to LINE via the Messaging API.",
+  "type": "module",
+  "scripts": {
+    "send-news": "node scripts/send-news-to-line.js"
+  },
+  "dependencies": {
+    "rss-parser": "^3.13.0"
+  }
+}
