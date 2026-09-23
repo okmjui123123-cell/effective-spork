@@ -1,26 +1,32 @@
 /**
  * LINE AI 助手 — Cloudflare Worker
  *
- * 收到 LINE 的訊息後轉給 Claude，再用 LINE 的「回覆訊息」(reply) API 回傳。
- * 回覆訊息不計入 LINE 免費方案的每月推播額度。
+ * 收到 LINE 的訊息後交給 Cloudflare Workers AI 產生回覆，
+ * 再用 LINE 的「回覆訊息」(reply) API 回傳。
+ *
+ * 兩邊都是免費的：
+ *   - LINE 的回覆訊息不計入免費方案的每月推播額度
+ *   - Workers AI 免費方案每天有 10,000 neurons，用完只會回錯誤，不會被收費
  *
  * 需要的環境變數（在 Cloudflare 後台設為 Secret）：
  *   LINE_CHANNEL_SECRET        — 驗證 webhook 來源
  *   LINE_CHANNEL_ACCESS_TOKEN  — 呼叫 LINE reply API
- *   ANTHROPIC_API_KEY          — 呼叫 Claude API
+ *
+ * 需要的 binding：
+ *   AI — Workers AI（在 Settings → Bindings 新增）
  *
  * 選用的 KV binding（沒綁定時就變成單次問答、不記得前文）：
  *   CHAT_HISTORY — 記住每個使用者最近幾輪對話
  *
- * 這支程式刻意寫成單一檔案、只用 fetch 而不用 npm 套件，
+ * 這支程式刻意寫成單一檔案、不依賴 npm 套件，
  * 這樣可以直接貼到 Cloudflare 後台編輯器部署，不需要安裝任何工具。
  */
 
-const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const LINE_REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 
-const MODEL = "claude-opus-5";
-const MAX_TOKENS = 1024;
+// 小模型比較省 neurons，免費額度能撐比較多則訊息
+const MODEL = "@cf/meta/llama-3.2-3b-instruct";
+const MAX_TOKENS = 512;
 const LINE_MAX_TEXT_LENGTH = 5000;
 
 // 記住最近幾則訊息（使用者 + 助手各算一則），以及保留多久
@@ -101,7 +107,7 @@ async function handleTextMessage(event, env) {
     const history = await loadHistory(env, userId);
     const messages = [...history, { role: "user", content: userText }];
 
-    const reply = await askClaude(messages, env);
+    const reply = await askAI(messages, env);
 
     await replyToLine(event.replyToken, reply, env);
     await saveHistory(env, userId, [
@@ -110,50 +116,28 @@ async function handleTextMessage(event, env) {
     ]);
   } catch (err) {
     console.error("handleTextMessage failed:", err);
-    await replyToLine(
-      event.replyToken,
-      "抱歉，剛剛出了點狀況，請再傳一次訊息試試。",
-      env
-    ).catch((replyErr) => console.error("error reply failed:", replyErr));
+    await replyToLine(event.replyToken, errorMessageFor(err), env).catch(
+      (replyErr) => console.error("error reply failed:", replyErr)
+    );
   }
 }
 
-async function askClaude(messages, env) {
-  const response = await fetch(ANTHROPIC_API_URL, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": env.ANTHROPIC_API_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      system: SYSTEM_PROMPT,
-      // 聊天用低 effort，回覆比較快，才來得及在 reply token 失效前回覆
-      output_config: { effort: "low" },
-      messages,
-    }),
+async function askAI(messages, env) {
+  const result = await env.AI.run(MODEL, {
+    messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+    max_tokens: MAX_TOKENS,
   });
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    throw new Error(`Claude API failed (${response.status}): ${errorBody}`);
-  }
-
-  const data = await response.json();
-
-  if (data.stop_reason === "refusal") {
-    return "這個問題我沒辦法回答，換個問題試試看？";
-  }
-
-  const text = (data.content ?? [])
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join("")
-    .trim();
-
+  const text = (result?.response ?? "").trim();
   return text || "（沒有產生回覆內容，請再試一次）";
+}
+
+function errorMessageFor(err) {
+  // Workers AI 免費額度用完時會丟 4006，每天 UTC 00:00（台灣時間早上 8 點）重置
+  if (String(err).includes("4006")) {
+    return "今天的免費 AI 額度用完了，台灣時間明天早上 8 點會重置，再來找我聊。";
+  }
+  return "抱歉，剛剛出了點狀況，請再傳一次訊息試試。";
 }
 
 async function replyToLine(replyToken, text, env) {
