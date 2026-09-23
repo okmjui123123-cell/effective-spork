@@ -60,3 +60,7 @@ TELEGRAM_BOT_TOKEN=xxx TELEGRAM_CHAT_ID=xxx npm run send-news
 ## 手動觸發
 
 到 GitHub repo 的 **Actions → Daily news to Telegram → Run workflow** 即可立即執行一次，不需要等到排程時間。
+
+## 其他專案
+
+- [`line-ai-assistant/`](line-ai-assistant/) — 把 LINE 官方帳號變成 AI 助手，傳訊息給它會用 Claude 回覆（跑在 Cloudflare Workers 上）

@@ -1,0 +1,14 @@
+name = "line-ai-assistant"
+main = "worker.js"
+compatibility_date = "2026-09-22"
+
+# Workers AI（免費方案每天 10,000 neurons）
+[ai]
+binding = "AI"
+
+# 選用：記住對話前文。要啟用的話，先建立 KV namespace：
+#   npx wrangler kv namespace create CHAT_HISTORY
+# 再把回傳的 id 填進下面，並把這三行的註解拿掉。
+# [[kv_namespaces]]
+# binding = "CHAT_HISTORY"
+# id = "把 wrangler 回傳的 id 貼在這裡"
