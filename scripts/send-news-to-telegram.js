@@ -55,17 +55,70 @@ async function writeState(state) {
   await writeFile(STATE_FILE, JSON.stringify(state, null, 2) + "\n", "utf8");
 }
 
-function formatItem(item) {
-  return `${item.title}\n${item.link}`;
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
+/** Google 新聞會把來源接在標題後面，例如「某某政策拍板上路 - 聯合報」 */
+function splitSource(rawTitle) {
+  const separator = rawTitle.lastIndexOf(" - ");
+  if (separator === -1) return { title: rawTitle.trim(), source: null };
+
+  return {
+    title: rawTitle.slice(0, separator).trim(),
+    source: rawTitle.slice(separator + 3).trim(),
+  };
+}
+
+function formatItem(item, index) {
+  const { title, source } = splitSource(item.title);
+  const link = `<a href="${escapeHtml(item.link)}">${escapeHtml(title)}</a>`;
+
+  return source
+    ? `${index + 1}. ${link} — ${escapeHtml(source)}`
+    : `${index + 1}. ${link}`;
+}
+
+function formatDateHeader() {
+  const parts = new Intl.DateTimeFormat("zh-TW", {
+    timeZone: "Asia/Taipei",
+    month: "numeric",
+    day: "numeric",
+    weekday: "short",
+  }).formatToParts(new Date());
+
+  const get = (type) => parts.find((part) => part.type === type)?.value ?? "";
+  const weekday = get("weekday").replace(/^週/, "");
+
+  return `📅 ${get("month")}/${get("day")}（${weekday}）早安`;
+}
+
+/**
+ * 依行切塊，不從字元中間切。
+ * 用了 HTML 格式後，硬切會把 <a> 標籤切成兩半，Telegram 會整則拒收。
+ */
 function chunkText(fullText) {
   const chunks = [];
-  let remaining = fullText;
-  while (remaining.length > 0) {
-    chunks.push(remaining.slice(0, TELEGRAM_MAX_TEXT_LENGTH));
-    remaining = remaining.slice(TELEGRAM_MAX_TEXT_LENGTH);
+  let current = "";
+
+  for (const line of fullText.split("\n")) {
+    if (current && current.length + 1 + line.length > TELEGRAM_MAX_TEXT_LENGTH) {
+      chunks.push(current);
+      current = "";
+    }
+
+    if (line.length > TELEGRAM_MAX_TEXT_LENGTH) {
+      // 單行就超長，Telegram 會擋下來；留著讓錯誤浮出來，而不是默默砍掉內容
+      console.warn(`Line exceeds Telegram's limit (${line.length} chars).`);
+    }
+
+    current = current ? `${current}\n${line}` : line;
   }
+
+  if (current) chunks.push(current);
   return chunks;
 }
 
@@ -79,7 +132,9 @@ async function sendToTelegram(text) {
       body: JSON.stringify({
         chat_id: TELEGRAM_CHAT_ID,
         text: chunk,
-        disable_web_page_preview: false,
+        parse_mode: "HTML",
+        // 一則摘要裡有十幾個連結，開著預覽會在訊息下方塞一大張圖
+        disable_web_page_preview: true,
       }),
     });
 
@@ -123,7 +178,9 @@ async function main() {
 
     if (items.length === 0) continue;
 
-    sections.push(`${feed.label}\n\n${items.map(formatItem).join("\n\n")}`);
+    sections.push(
+      `${feed.label} (${items.length})\n${items.map(formatItem).join("\n")}`
+    );
     newState[feed.key] = {
       lastPubDate: items[items.length - 1].pubDateObj.toISOString(),
     };
@@ -135,7 +192,13 @@ async function main() {
     return;
   }
 
-  await sendToTelegram(sections.join("\n\n---\n\n"));
+  const message = [
+    formatDateHeader(),
+    ...sections,
+    `— 今日共 ${totalItems} 則`,
+  ].join("\n\n");
+
+  await sendToTelegram(message);
   await writeState(newState);
 
   console.log(`Sent ${totalItems} news item(s) to Telegram.`);
